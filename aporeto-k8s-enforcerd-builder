@@ -7,6 +7,8 @@ local ok
 ok=true
 [[ "$ENFORCERD_API" ]] || { err "Missing required env var ENFORCERD_API"; ok=false; }
 [[ "$ENFORCERD_NAMESPACE" ]] || { err "Missing required env var ENFORCERD_NAMESPACE"; ok=false; }
+[[ "$ENFORCERD_IMAGE" ]] || { err "Missing required env var ENFORCERD_IMAGE"; ok=false; }
+
 "$ok" || return 2
 
 cat <<EOF
@@ -91,7 +93,7 @@ spec:
       imagePullSecrets:
       containers:
         - name: enforcerd
-          image: gcr.io/prismacloud-cns/enforcerd:v1.1489.3
+          image: $ENFORCERD_IMAGE
           imagePullPolicy: IfNotPresent
           securityContext:
             runAsUser: 0
@@ -111,9 +113,9 @@ spec:
           args: ["--tag=clustertype=eks"]
           env:
             - name: ENFORCERD_NAMESPACE
-              value: "$ENFORCERD_NAMESPACE"
+              value: $ENFORCERD_NAMESPACE
             - name: ENFORCERD_API
-              value: "$ENFORCERD_API"
+              value: $ENFORCERD_API
             - name: ENFORCERD_LOG_FORMAT
               value: "json"
             - name: ENFORCERD_LOG_LEVEL
