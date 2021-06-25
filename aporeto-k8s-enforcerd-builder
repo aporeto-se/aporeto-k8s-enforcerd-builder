@@ -1,0 +1,219 @@
+#!/bin/bash
+
+function main()
+{
+
+local ok
+ok=true
+[[ "$ENFORCERD_API" ]] || { err "Missing required env var ENFORCERD_API"; ok=false; }
+[[ "$ENFORCERD_NAMESPACE" ]] || { err "Missing required env var ENFORCERD_NAMESPACE"; ok=false; }
+"$ok" || return 2
+
+cat <<EOF
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: "enforcerd"
+  namespace: "aporeto"
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: "enforcerd"
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - nodes
+    verbs:
+      - get
+  - apiGroups:
+      - ""
+    resources:
+      - pods
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - ""
+    resources:
+      - events
+    verbs:
+      - create
+      - patch
+      - update
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: "enforcerd"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: "enforcerd"
+subjects:
+  - kind: ServiceAccount
+    name: "enforcerd"
+    namespace: "aporeto"
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  labels:
+    instance: "enforcerd"
+    app: enforcerd
+    vendor: aporeto
+  name: "enforcerd"
+  namespace: "aporeto"
+spec:
+  updateStrategy:
+    type: RollingUpdate
+  selector:
+    matchLabels:
+      instance: "enforcerd"
+      app: enforcerd
+      vendor: aporeto
+  template:
+    metadata:
+      annotations:
+        container.apparmor.security.beta.kubernetes.io/enforcerd: unconfined
+      labels:
+        instance: "enforcerd"
+        app: enforcerd
+        vendor: aporeto
+    spec:
+      serviceAccountName: "enforcerd"
+      dnsPolicy: ClusterFirstWithHostNet
+      hostNetwork: true
+      hostPID: true
+      terminationGracePeriodSeconds: 600
+      imagePullSecrets:
+      containers:
+        - name: enforcerd
+          image: gcr.io/prismacloud-cns/enforcerd:v1.1489.3
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            runAsUser: 0
+            runAsGroup: 0
+            readOnlyRootFilesystem: true
+            capabilities:
+              add:
+                - KILL
+                - SYS_PTRACE
+                - NET_ADMIN
+                - NET_RAW
+                - SYS_RESOURCE
+                - SYS_ADMIN
+                - SYS_MODULE
+          command:
+            - /enforcerd
+          args: ["--tag=clustertype=eks"]
+          env:
+            - name: ENFORCERD_NAMESPACE
+              value: "$ENFORCERD_NAMESPACE"
+            - name: ENFORCERD_API
+              value: "$ENFORCERD_API"
+            - name: ENFORCERD_LOG_FORMAT
+              value: "json"
+            - name: ENFORCERD_LOG_LEVEL
+              value: "info"
+            - name: ENFORCERD_WORKING_DIR
+              value: "/var/lib/prisma-enforcer/enforcerd"
+            - name: ENFORCERD_LOG_TO_CONSOLE
+              value: "true"
+            - name: ENFORCERD_ENABLE_KUBERNETES
+              value: "true"
+            - name: ENFORCERD_TRANSMITTER_QUEUE_COUNT
+              value: "2"
+            - name: ENFORCERD_RECEIVER_QUEUE_COUNT
+              value: "2"
+            - name: ENFORCERD_FLOW_REPORTING_INTERVAL
+              value: "5m"
+            - name: ENFORCERD_API_SKIP_VERIFY
+              value: "false"
+            - name: ENFORCERD_KUBENODE
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName            
+            # get pod name and namespace so that we can ignore ourselves
+            # and prevent accidental self-enforcing
+            # NOTE: do not modify these two entries!
+            - name: K8S_POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: K8S_POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: ENFORCERD_ACTIVATE_KUBE_SYSTEM_PUS
+              value: "false"
+            - name: ENFORCERD_ACTIVATE_OPENSHIFT_PUS
+              value: "false"
+            - name: ENFORCERD_KUBERNETES_MONITOR_WORKERS
+              value: "4"
+            - name: ENFORCERD_INSTALL_CNI_PLUGIN
+              value: 
+            - name: ENFORCERD_INSTALL_RUNC_PROXY
+              value: 
+            - name: ENFORCERD_CNI_BIN_DIR
+              value: /opt/cni/bin
+            - name: ENFORCERD_CNI_CONF_DIR
+              value: /etc/cni/net.d
+            - name: ENFORCERD_CNI_CHAINED
+              value: "true"
+            - name: ENFORCERD_CNI_MULTUS_DEFAULT_NETWORK
+              value: "false"
+            - name: ENFORCERD_CNI_CONF_FILENAME
+              value: 
+            - name: ENFORCERD_CNI_PRIMARY_CONF_FILE
+              value: 
+          volumeMounts:
+            - name: working-dir
+              mountPath: /var/lib/prisma-enforcer/enforcerd
+            - name: cni-bin-dir
+              mountPath: /opt/cni/bin
+            - name: cni-conf-dir
+              mountPath: /etc/cni/net.d
+            - name: var-run
+              mountPath: /var/run
+              mountPropagation: HostToContainer
+            - name: run
+              mountPath: /run
+              mountPropagation: HostToContainer
+            - name: var-lib
+              mountPath: /var/lib
+              readOnly: true
+              mountPropagation: HostToContainer
+            - name: cgroups
+              mountPath: "/sys/fs/cgroup"
+      volumes:
+        - name: working-dir
+          hostPath:
+            path: /var/lib/prisma-enforcer/enforcerd
+            type: DirectoryOrCreate
+        - name: cni-bin-dir
+          hostPath:
+            path: /opt/cni/bin
+        - name: cni-conf-dir
+          hostPath:
+            path: /etc/cni/net.d
+        - name: var-run
+          hostPath:
+            path: /var/run
+        - name: run
+          hostPath:
+            path: /run
+        - name: var-lib
+          hostPath:
+            path: /var/lib
+        - name: cgroups
+          hostPath:
+            path: "/sys/fs/cgroup"
+EOF
+}
+
+function err() { echo "$@" 1>&2; }
+
+main "$@"
