@@ -14,3 +14,6 @@ This generates Prisma Microsegmentation (Aporeto) enforcer Kubernetes yaml for u
 1. make
 1. kubectl create ns aporeto
 1. kubectl apply -f enforcerd.yaml
+
+## Note
+You must have a valid cloud registration policy created and enabled. You can test this by running the command 'apoctl auth aws/azure/gcp' from within a container running within your K8S cluster.
