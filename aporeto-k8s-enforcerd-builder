@@ -8,6 +8,11 @@ ok=true
 [[ "$ENFORCERD_API" ]] || { err "Missing required env var ENFORCERD_API"; ok=false; }
 [[ "$ENFORCERD_NAMESPACE" ]] || { err "Missing required env var ENFORCERD_NAMESPACE"; ok=false; }
 [[ "$ENFORCERD_IMAGE" ]] || { err "Missing required env var ENFORCERD_IMAGE"; ok=false; }
+[[ "$ENFORCERD_CLUSTERTYPE" ]] || { err "Missing required env var ENFORCERD_CLUSTERTYPE"; ok=false; }
+
+[[ "$ENFORCERD_CNI_BIN_DIR" ]] || { err "Missing required env var ENFORCERD_CNI_BIN_DIR"; ok=false; }
+[[ "$ENFORCERD_CNI_CONF_DIR" ]] || { err "Missing required env var ENFORCERD_CNI_CONF_DIR"; ok=false; }
+
 
 "$ok" || return 2
 
@@ -110,7 +115,7 @@ spec:
                 - SYS_MODULE
           command:
             - /enforcerd
-          args: ["--tag=clustertype=eks"]
+          args: ["--tag=clustertype=$ENFORCERD_CLUSTERTYPE"]
           env:
             - name: ENFORCERD_NAMESPACE
               value: $ENFORCERD_NAMESPACE
@@ -156,21 +161,21 @@ spec:
             - name: ENFORCERD_KUBERNETES_MONITOR_WORKERS
               value: "4"
             - name: ENFORCERD_INSTALL_CNI_PLUGIN
-              value: 
+              value: $ENFORCERD_INSTALL_CNI_PLUGIN 
             - name: ENFORCERD_INSTALL_RUNC_PROXY
-              value: 
+              value: $ENFORCERD_INSTALL_RUNC_PROXY
             - name: ENFORCERD_CNI_BIN_DIR
-              value: /opt/cni/bin
+              value: $ENFORCERD_CNI_BIN_DIR
             - name: ENFORCERD_CNI_CONF_DIR
-              value: /etc/cni/net.d
+              value: $ENFORCERD_CNI_CONF_DIR
             - name: ENFORCERD_CNI_CHAINED
               value: "true"
             - name: ENFORCERD_CNI_MULTUS_DEFAULT_NETWORK
               value: "false"
             - name: ENFORCERD_CNI_CONF_FILENAME
-              value: 
+              value: $ENFORCERD_CNI_CONF_FILENAME
             - name: ENFORCERD_CNI_PRIMARY_CONF_FILE
-              value: 
+              value: $ENFORCERD_CNI_PRIMARY_CONF_FILE
           volumeMounts:
             - name: working-dir
               mountPath: /var/lib/prisma-enforcer/enforcerd
